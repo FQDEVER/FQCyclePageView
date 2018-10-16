@@ -192,14 +192,28 @@
 
 - (void)scrollToIndex:(int)targetIndex
 {
-    if (targetIndex >= _totalItemsCount) {
+    /*
+     The number of 20 * _originitemscount is reserved, and the user can swipe manually without switching.
+     */
+    if (targetIndex >= _totalItemsCount - _originItemsCount * 20 && targetIndex < _totalItemsCount) {
         
+        [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:targetIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:YES];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self->_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:self->_totalItemsCount * 0.5 + (targetIndex % self->_originItemsCount) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+        });
+        
+    }else if(targetIndex >= _totalItemsCount){
         targetIndex = _totalItemsCount * 0.5;
         [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:targetIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
-        return;
+        int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:targetIndex];
+        if (_delegateFlags.didScrollToIndex) {
+            [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
+        } else if (self.itemDidScrollOperationBlock) {
+            self.itemDidScrollOperationBlock(indexOnPageControl);
+        }
+    }else{
+        [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:targetIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:YES];
     }
-    
-    [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:targetIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:YES];
 }
 
 - (int)currentIndex
@@ -229,7 +243,10 @@
 - (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section
 {
     self.originItemsCount = [_dataSource numberOfItemsInPagerView:self];
-    _totalItemsCount = self.originItemsCount > 1 ? self.originItemsCount * 200 : self.originItemsCount;
+    /*
+     Using CollectionView reuse mechanism
+     */
+    _totalItemsCount = self.originItemsCount > 1 ? self.originItemsCount * 1000 : self.originItemsCount;
     return _totalItemsCount;
 }
 
@@ -274,6 +291,16 @@
     if (self.autoScroll) {
         [self setupTimer];
     }
+}
+
+/**
+  Slow motion is called at the end of the animation to ensure that the manual slide will not go to the final situation
+ */
+- (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView
+{
+    int targetIndex = [self currentIndex];
+  
+    [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:_totalItemsCount * 0.5 + (targetIndex % _originItemsCount) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
 }
 
 /**
@@ -333,7 +360,9 @@
         CGFloat offsetY = targetContentOffset->y;
         currentIndex = offsetY / (_flowLayout.itemSize.height + _flowLayout.minimumLineSpacing);
     }
+   
     int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:currentIndex];
+
     if (_delegateFlags.didScrollToIndex) {
         [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
     } else if (self.itemDidScrollOperationBlock) {
@@ -368,7 +397,13 @@
     if (0 == _totalItemsCount) return;
 
      [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:(int)(_totalItemsCount * 0.5 + index) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
-    
+    int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:index];
+    if (_delegateFlags.didScrollToIndex) {
+        [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
+    } else if (self.itemDidScrollOperationBlock) {
+        self.itemDidScrollOperationBlock(indexOnPageControl);
+    }
+
     if (self.autoScroll) {
         [self setupTimer];
     }
@@ -382,6 +417,7 @@
 {
     if (_autoScroll) {
         [self setupTimer];
+        [self adjustWhenControllerViewWillAppera];
     }
 }
 
@@ -390,7 +426,28 @@
  */
 -(void)cycleViewWillDisappear
 {
-    [self invalidateTimer];
+    if (_autoScroll) {
+        [self invalidateTimer];
+        [self adjustWhenControllerViewWillAppera];
+    }
+}
+
+/**
+ When resolving viewwillappear when a carousel card is in half the problem, call this method when the controller viewwillappear
+ */
+- (void)adjustWhenControllerViewWillAppera
+{
+    long targetIndex = [self currentIndex];
+    if (targetIndex < _totalItemsCount) {
+        [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:targetIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+        
+        int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:targetIndex];
+        if (_delegateFlags.didScrollToIndex) {
+            [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
+        } else if (self.itemDidScrollOperationBlock) {
+            self.itemDidScrollOperationBlock(indexOnPageControl);
+        }
+    }
 }
 
 #pragma mark - dealloc
