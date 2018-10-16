@@ -90,8 +90,8 @@
 }
 
 - (NSInteger)numberOfItemsInPagerView:(FQCyclePageView *)pageView {
-    self.pageControl.numberOfPages = 3;
-    return 3;
+    self.pageControl.numberOfPages = 2;
+    return 2;
 }
 
 - (__kindof UICollectionViewCell *)cycleScrollView:(FQCyclePageView *)cycleScrollView cellForItemAtIndex:(NSInteger)index {
@@ -117,7 +117,6 @@
 {
     if ([cycleScrollView isEqual:self.pagerView]) {
         self.pageControl.currentPage =  index;
-        NSLog(@"---------------------->%zd",index);
     }
 }
 

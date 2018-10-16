@@ -190,18 +190,16 @@
     [self scrollToIndex:targetIndex];
 }
 
-- (void)scrollToIndex:(int)targetIndex
+- (void) scrollToIndex:(int)targetIndex
 {
     /*
      The number of 20 * _originitemscount is reserved, and the user can swipe manually without switching.
      */
     if (targetIndex >= _totalItemsCount - _originItemsCount * 20 && targetIndex < _totalItemsCount) {
-        
         [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:targetIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:YES];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [self->_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:self->_totalItemsCount * 0.5 + (targetIndex % self->_originItemsCount) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
         });
-        
     }else if(targetIndex >= _totalItemsCount){
         targetIndex = _totalItemsCount * 0.5;
         [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:targetIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
@@ -294,13 +292,17 @@
 }
 
 /**
-  Slow motion is called at the end of the animation to ensure that the manual slide will not go to the final situation
+ Slow motion is called at the end of the animation to ensure that the manual slide will not go to the final situation
  */
 - (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView
 {
     int targetIndex = [self currentIndex];
-  
-    [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:_totalItemsCount * 0.5 + (targetIndex % _originItemsCount) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+    /*
+     Previously, consider updating the location each time you manually scroll. However, there will be a case where the cell flashes. So the compromise is the rest of the security range. Triggers a jump method
+     */
+    if (targetIndex >= _totalItemsCount - _originItemsCount * 20) {
+        [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:_totalItemsCount * 0.5 + (targetIndex % _originItemsCount) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+    }
 }
 
 /**
@@ -349,7 +351,6 @@
  It is important to note that the targetcontentoffset here is a pointer, yes, you can change the deceleration movement of the destination, which is very useful in the implementation of some effects, the example will be specific to the use of the chapter, and other implementation methods to compare. Typically used to calculate the final offset value
  */
 - (void)scrollViewWillEndDragging:(UIScrollView *)scrollView withVelocity:(CGPoint)velocity targetContentOffset:(inout CGPoint *)targetContentOffset{
-
     if (!self.totalItemsCount) return;
     int currentIndex = 0;
     if (_flowLayout.scrollDirection == UICollectionViewScrollDirectionHorizontal) {
@@ -360,9 +361,8 @@
         CGFloat offsetY = targetContentOffset->y;
         currentIndex = offsetY / (_flowLayout.itemSize.height + _flowLayout.minimumLineSpacing);
     }
-   
     int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:currentIndex];
-
+    
     if (_delegateFlags.didScrollToIndex) {
         [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
     } else if (self.itemDidScrollOperationBlock) {
@@ -395,15 +395,15 @@
         [self invalidateTimer];
     }
     if (0 == _totalItemsCount) return;
-
-     [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:(int)(_totalItemsCount * 0.5 + index) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+    
+    [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:(int)(_totalItemsCount * 0.5 + index) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
     int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:index];
     if (_delegateFlags.didScrollToIndex) {
         [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
     } else if (self.itemDidScrollOperationBlock) {
         self.itemDidScrollOperationBlock(indexOnPageControl);
     }
-
+    
     if (self.autoScroll) {
         [self setupTimer];
     }
