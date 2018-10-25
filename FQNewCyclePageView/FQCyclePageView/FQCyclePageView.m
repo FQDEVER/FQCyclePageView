@@ -7,7 +7,6 @@
 //
 
 #import "FQCyclePageView.h"
-#import "FQCycleFlowLayout.h"
 
 @interface FQCyclePageView()<UICollectionViewDataSource, UICollectionViewDelegate>
 {
@@ -43,12 +42,17 @@
 /**
  flow layout style
  */
-@property (nonatomic, strong) FQCycleFlowLayout *flowLayout;
+@property (nonatomic, strong) UICollectionViewFlowLayout *flowLayout;
 
 /**
  timer
  */
 @property (nonatomic, weak) NSTimer *timer;
+
+/**
+ selectIndex
+ */
+@property (nonatomic, assign) NSInteger selectIndex;
 
 @end
 
@@ -66,12 +70,7 @@
 
 - (void)setupMainView
 {
-    _flowLayout = [[FQCycleFlowLayout alloc]init];
-    _flowLayout.itemSize = CGSizeMake(self.bounds.size.width - 30, self.bounds.size.height);
-    _flowLayout.scrollDirection = UICollectionViewScrollDirectionHorizontal;
-    _flowLayout.minimumLineSpacing = 10;
-    _flowLayout.sectionInset = UIEdgeInsetsMake(0, 15, 0, 15);
-    
+    _flowLayout = [[UICollectionViewFlowLayout alloc]init];
     UICollectionView *mainView = [[UICollectionView alloc] initWithFrame:CGRectMake(0, 0, self.bounds.size.width, self.bounds.size.height) collectionViewLayout:_flowLayout];
     mainView.backgroundColor = [UIColor clearColor];
     mainView.decelerationRate = UIScrollViewDecelerationRateFast;
@@ -185,12 +184,11 @@
 - (void)automaticScroll
 {
     if (_originItemsCount == 0 || _originItemsCount == 1 ) return;
-    int currentIndex = [self currentIndex];
-    int targetIndex = currentIndex + 1;
-    [self scrollToIndex:targetIndex];
+    self.selectIndex += 1;
+    [self scrollToIndex: self.selectIndex];
 }
 
-- (void) scrollToIndex:(int)targetIndex
+- (void) scrollToIndex:(NSInteger)targetIndex
 {
     /*
      The number of 20 * _originitemscount is reserved, and the user can swipe manually without switching.
@@ -212,22 +210,6 @@
     }else{
         [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:targetIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:YES];
     }
-}
-
-- (int)currentIndex
-{
-    if (_mainView.bounds.size.width == 0 || _mainView.bounds.size.height == 0) {
-        return 0;
-    }
-    
-    int index = 0;
-    if (_flowLayout.scrollDirection == UICollectionViewScrollDirectionHorizontal) {
-        index = (_mainView.contentOffset.x) / (_flowLayout.itemSize.width + _flowLayout.minimumLineSpacing);
-    } else {
-        index = (_mainView.contentOffset.y) / (_flowLayout.itemSize.height + _flowLayout.minimumLineSpacing);
-    }
-    
-    return MAX(0, index);
 }
 
 - (int)pageControlIndexWithCurrentCellIndex:(NSInteger)index
@@ -282,6 +264,53 @@
 }
 
 /**
+ This method was introduced from IOS 5 and was called before didenddragging, when the velocity in the Willenddragging method was Cgpointzero (no speed in two directions at the end of the drag), Didenddragging Decele Rate is no, that is, there is no deceleration process, and willbegindecelerating and didenddecelerating are not called. Conversely, when velocity is not cgpointzero, scroll view slows down to targetcontentoffset with velocity as the initial velocity.
+ It is important to note that the targetcontentoffset here is a pointer, yes, you can change the deceleration movement of the destination, which is very useful in the implementation of some effects, the example will be specific to the use of the chapter, and other implementation methods to compare. Typically used to calculate the final offset value
+ */
+- (void)scrollViewWillEndDragging:(UIScrollView *)scrollView withVelocity:(CGPoint)velocity targetContentOffset:(inout CGPoint *)targetContentOffset{
+    if (!self.totalItemsCount) return;
+    if (self.flowLayout.scrollDirection == UICollectionViewScrollDirectionHorizontal) {
+        if(velocity.x > 0) {//next
+            self.selectIndex += 1;
+        }else if (velocity.x < 0) {//up
+            self.selectIndex -= 1;
+        }else if (velocity.x == 0) {
+            //When you slide your finger and hold it and then release it, the acceleration is actually zero
+            CGFloat offSizeX = scrollView.contentOffset.x - self.selectIndex * (_flowLayout.itemSize.width + _flowLayout.minimumLineSpacing);
+            if ( offSizeX > 0) {
+                self.selectIndex += 1;
+            }else if(offSizeX < 0){
+                self.selectIndex -= 1;
+            }
+        }
+        targetContentOffset->x = self.selectIndex * (_flowLayout.itemSize.width + _flowLayout.minimumLineSpacing);
+    }else{
+        if(velocity.y > 0) {//next
+            self.selectIndex += 1;
+        }else if (velocity.y < 0) {//up
+            self.selectIndex -= 1;
+        }else if (velocity.y == 0) {
+            //When you slide your finger and hold it and then release it, the acceleration is actually zero
+            CGFloat offSizeY = scrollView.contentOffset.y - self.selectIndex * (_flowLayout.itemSize.height + _flowLayout.minimumLineSpacing);
+            if ( offSizeY > 0) {
+                self.selectIndex += 1;
+            }else if(offSizeY < 0){
+                self.selectIndex -= 1;
+            }
+        }
+        targetContentOffset->y = self.selectIndex * (_flowLayout.itemSize.height + _flowLayout.minimumLineSpacing);
+    }
+    
+    int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:self.selectIndex];
+    if (_delegateFlags.didScrollToIndex) {
+        [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
+    } else if (self.itemDidScrollOperationBlock) {
+        self.itemDidScrollOperationBlock(indexOnPageControl);
+    }
+    
+}
+
+/**
  When the user ends the drag and is called, when Decelerate is YES, the end of the drag will have a deceleration process. Note that after didenddragging, if there is a deceleration process, the dragging of scroll view is not immediately set to no, but until the deceleration is over, so the actual semantics of this dragging attribute are closer to scrolling.
  */
 - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate
@@ -296,14 +325,15 @@
  */
 - (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView
 {
-    int targetIndex = [self currentIndex];
     /*
      Previously, consider updating the location each time you manually scroll. However, there will be a case where the cell flashes. So the compromise is the rest of the security range. Triggers a jump method
      */
-    if (targetIndex >= _totalItemsCount - _originItemsCount * 20) {
-        [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:_totalItemsCount * 0.5 + (targetIndex % _originItemsCount) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+    if (self.selectIndex >= _totalItemsCount - _originItemsCount * 20) {
+        [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:_totalItemsCount * 0.5 + (self.selectIndex % _originItemsCount) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+        self.selectIndex = _totalItemsCount * 0.5 + (self.selectIndex % _originItemsCount);
     }
 }
+
 
 /**
  The end scrolling animation is called.
@@ -311,34 +341,7 @@
 - (void)scrollViewDidEndScrollingAnimation:(UIScrollView *)scrollView
 {
     if (!self.totalItemsCount) return;
-    int itemIndex = [self currentIndex];
-    int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:itemIndex];
-    
-    /*
-     Prevents the end of scrolling from scrolling to the specified position
-     */
-    if (_flowLayout.scrollDirection == UICollectionViewScrollDirectionHorizontal) {
-        CGFloat offsetX = scrollView.contentOffset.x;
-        CGFloat needOffsetX = itemIndex * (_flowLayout.itemSize.width + _minimumLineSpacing);
-        if (offsetX > needOffsetX) {
-            [self scrollToIndex:itemIndex + 1];
-            indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:itemIndex + 1];
-        }else if (offsetX < needOffsetX){
-            [self scrollToIndex:itemIndex - 1];
-            indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:itemIndex - 1];
-        }
-    }else{
-        CGFloat offsetY = scrollView.contentOffset.y;
-        CGFloat needOffsetY = itemIndex * (_flowLayout.itemSize.height + _minimumLineSpacing);
-        if (offsetY > needOffsetY) {
-            [self scrollToIndex:itemIndex + 1];
-            indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:itemIndex + 1];
-        }else if (offsetY < needOffsetY){
-            [self scrollToIndex:itemIndex - 1];
-            indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:itemIndex - 1];
-        }
-    }
-    
+    int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:self.selectIndex];
     if (_delegateFlags.didScrollToIndex) {
         [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
     } else if (_itemDidScrollOperationBlock) {
@@ -346,30 +349,6 @@
     }
 }
 
-/**
- This method was introduced from IOS 5 and was called before didenddragging, when the velocity in the Willenddragging method was Cgpointzero (no speed in two directions at the end of the drag), Didenddragging Decele Rate is no, that is, there is no deceleration process, and willbegindecelerating and didenddecelerating are not called. Conversely, when velocity is not cgpointzero, scroll view slows down to targetcontentoffset with velocity as the initial velocity.
- It is important to note that the targetcontentoffset here is a pointer, yes, you can change the deceleration movement of the destination, which is very useful in the implementation of some effects, the example will be specific to the use of the chapter, and other implementation methods to compare. Typically used to calculate the final offset value
- */
-- (void)scrollViewWillEndDragging:(UIScrollView *)scrollView withVelocity:(CGPoint)velocity targetContentOffset:(inout CGPoint *)targetContentOffset{
-    if (!self.totalItemsCount) return;
-    int currentIndex = 0;
-    if (_flowLayout.scrollDirection == UICollectionViewScrollDirectionHorizontal) {
-        CGFloat offsetX = targetContentOffset->x;
-        currentIndex = offsetX / (_flowLayout.itemSize.width + _flowLayout.minimumLineSpacing);
-        
-    }else{
-        CGFloat offsetY = targetContentOffset->y;
-        currentIndex = offsetY / (_flowLayout.itemSize.height + _flowLayout.minimumLineSpacing);
-    }
-    int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:currentIndex];
-    
-    if (_delegateFlags.didScrollToIndex) {
-        [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
-    } else if (self.itemDidScrollOperationBlock) {
-        self.itemDidScrollOperationBlock(indexOnPageControl);
-    }
-    
-}
 
 #pragma mark - Public external methods
 
@@ -397,6 +376,7 @@
     if (0 == _totalItemsCount) return;
     
     [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:(int)(_totalItemsCount * 0.5 + index) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+    self.selectIndex = (int)(_totalItemsCount * 0.5 + index);
     int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:index];
     if (_delegateFlags.didScrollToIndex) {
         [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
@@ -437,11 +417,9 @@
  */
 - (void)adjustWhenControllerViewWillAppera
 {
-    long targetIndex = [self currentIndex];
-    if (targetIndex < _totalItemsCount) {
-        [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:targetIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
-        
-        int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:targetIndex];
+    if (self.selectIndex < _totalItemsCount) {
+        [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:self.selectIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+        int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:self.selectIndex];
         if (_delegateFlags.didScrollToIndex) {
             [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
         } else if (self.itemDidScrollOperationBlock) {

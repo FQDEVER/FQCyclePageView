@@ -10,6 +10,8 @@
 
 @interface FQ_CycleCollectionCell()
 @property (nonatomic, strong) UIImageView *imgView;
+
+@property (nonatomic, strong) UILabel *currentLabel;
 @end
 
 @implementation FQ_CycleCollectionCell
@@ -22,6 +24,9 @@
         self.contentView.clipsToBounds = YES;
         self.imgView.layer.masksToBounds = YES;
         self.imgView.layer.cornerRadius = 15.0;
+        
+        [self.contentView addSubview:self.currentLabel];
+        self.currentLabel.frame = self.contentView.bounds;
     }
     return self;
 }
@@ -34,11 +39,25 @@
     return _imgView;
 }
 
+-(UILabel *)currentLabel
+{
+    if (!_currentLabel) {
+        _currentLabel = [[UILabel alloc]init];
+        _currentLabel.textColor = UIColor.redColor;
+    }
+    return _currentLabel;
+}
+
 -(void)setImgStr:(NSString *)imgStr
 {
     _imgStr = imgStr;
     _imgView.image = [UIImage imageNamed:imgStr];
 }
 
+-(void)setIndex:(NSInteger)index
+{
+    _index = index;
+    _currentLabel.text = @(index).stringValue;
+}
 
 @end

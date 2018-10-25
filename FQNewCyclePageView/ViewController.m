@@ -41,14 +41,14 @@
 - (void)addPagerView {
     
     FQCyclePageView *pagerView = [[FQCyclePageView alloc]initWithFrame:CGRectMake(0, 100, self.view.bounds.size.width, 180)];
-    pagerView.fq_padding = 15.0;
-    pagerView.minimumLineSpacing = 10;
+    pagerView.fq_padding = 0.0;
+    pagerView.minimumLineSpacing = 20;
     pagerView.backgroundColor = [UIColor whiteColor];
     pagerView.autoScrollTimeInterval = 3.0;
     pagerView.autoScroll = YES;
     pagerView.dataSource = self;
     pagerView.delegate = self;
-    pagerView.scrollDirection = UICollectionViewScrollDirectionHorizontal;
+    pagerView.scrollDirection = UICollectionViewScrollDirectionVertical;
     [pagerView registerClass:[FQ_CycleCollectionCell class] forCellWithReuseIdentifier:@"FQ_CycleCollectionCellID"];
     self.pagerView = pagerView;
     [self.view addSubview:self.pagerView];
@@ -98,6 +98,7 @@
     if ([cycleScrollView isEqual:self.pagerView]) {
         FQ_CycleCollectionCell *cell = [cycleScrollView dequeueReusableCellWithReuseIdentifier:@"FQ_CycleCollectionCellID" forIndex:index];
         cell.imgStr = @(index % 3 + 1).stringValue;
+        cell.index = index;
         return cell;
     }else{
         FQ_TextCycleCollectionCell *cell = [cycleScrollView dequeueReusableCellWithReuseIdentifier:@"FQ_TextCycleCollectionCellID" forIndex:index];

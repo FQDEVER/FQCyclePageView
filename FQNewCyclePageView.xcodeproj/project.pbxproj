@@ -122,6 +122,8 @@
 				B9509AB521743A9B00AF15A3 /* AppDelegate.m */,
 				B9509AB721743A9B00AF15A3 /* ViewController.h */,
 				B9509AB821743A9B00AF15A3 /* ViewController.m */,
+				B9509B022174959C00AF15A3 /* FQCycleFlowLayout.h */,
+				B9509B032174959C00AF15A3 /* FQCycleFlowLayout.m */,
 				B9509AEE21743B2700AF15A3 /* FQ_CycleCollectionCell.h */,
 				B9509AEF21743B2700AF15A3 /* FQ_CycleCollectionCell.m */,
 				B9509AFB21748C1200AF15A3 /* FQ_TextCycleCollectionCell.h */,
@@ -155,8 +157,6 @@
 		B9509B012174959C00AF15A3 /* FQCyclePageView */ = {
 			isa = PBXGroup;
 			children = (
-				B9509B022174959C00AF15A3 /* FQCycleFlowLayout.h */,
-				B9509B032174959C00AF15A3 /* FQCycleFlowLayout.m */,
 				B9509B042174959C00AF15A3 /* FQCyclePageView.h */,
 				B9509B052174959C00AF15A3 /* FQCyclePageView.m */,
 				B9509B062174959C00AF15A3 /* FQPageControl.h */,
