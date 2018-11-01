@@ -81,15 +81,17 @@
     [self addSubview:mainView];
     _mainView = mainView;
     
-    self.beginIndex = 0;
 }
 
 - (void)initialization
 {
+    self.fq_padding = 15.0f;
     self.autoScrollTimeInterval = 2.0;
     self.autoScroll = YES;
     self.dequeueSection = 0;
+    self.scrollDirection = UICollectionViewScrollDirectionHorizontal;
     self.backgroundColor = [UIColor whiteColor];
+    self.beginIndex = 0;
 }
 
 
@@ -111,10 +113,9 @@
     _flowLayout.sectionInset = UIEdgeInsetsMake(0, fq_padding, 0, fq_padding);
 }
 
--(void)setBeginIndex:(NSInteger)beginIndex
+-(void)setTotalItemsCount:(NSInteger)totalItemsCount
 {
-    _beginIndex = beginIndex;
-    
+    _totalItemsCount = totalItemsCount;
     dispatch_async(dispatch_get_main_queue(), ^{
         [self makeScrollViewScrollToIndex:self.beginIndex];
     });
@@ -193,15 +194,18 @@
     /*
      The number of 20 * _originitemscount is reserved, and the user can swipe manually without switching.
      */
-    if (targetIndex >= _totalItemsCount - _originItemsCount * 20 && targetIndex < _totalItemsCount) {
+    if ((targetIndex >= _totalItemsCount - _originItemsCount * 20 && targetIndex < _totalItemsCount) || targetIndex <= 20 * _originItemsCount) {
+        
         [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:targetIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:YES];
+        self.selectIndex = _totalItemsCount * 0.5 + (targetIndex % _originItemsCount);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [self->_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:self->_totalItemsCount * 0.5 + (targetIndex % self->_originItemsCount) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+            [self->_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:self.selectIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
         });
     }else if(targetIndex >= _totalItemsCount){
         targetIndex = _totalItemsCount * 0.5;
+        self.selectIndex = targetIndex;
         [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:targetIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
-        int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:targetIndex];
+        NSInteger indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:targetIndex];
         if (_delegateFlags.didScrollToIndex) {
             [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
         } else if (self.itemDidScrollOperationBlock) {
@@ -212,9 +216,9 @@
     }
 }
 
-- (int)pageControlIndexWithCurrentCellIndex:(NSInteger)index
+- (NSInteger)pageControlIndexWithCurrentCellIndex:(NSInteger)index
 {
-    return (int)index % self.originItemsCount;
+    return (NSInteger)index % self.originItemsCount;
 }
 
 #pragma mark - UICollectionViewDataSource
@@ -226,8 +230,8 @@
     /*
      Using CollectionView reuse mechanism
      */
-    _totalItemsCount = self.originItemsCount > 1 ? self.originItemsCount * 1000 : self.originItemsCount;
-    return _totalItemsCount;
+    self.totalItemsCount = self.originItemsCount > 1 ? self.originItemsCount * 1000 : self.originItemsCount;
+    return self.totalItemsCount;
 }
 
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath
@@ -301,7 +305,7 @@
         targetContentOffset->y = self.selectIndex * (_flowLayout.itemSize.height + _flowLayout.minimumLineSpacing);
     }
     
-    int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:self.selectIndex];
+    NSInteger indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:self.selectIndex];
     if (_delegateFlags.didScrollToIndex) {
         [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
     } else if (self.itemDidScrollOperationBlock) {
@@ -328,9 +332,9 @@
     /*
      Previously, consider updating the location each time you manually scroll. However, there will be a case where the cell flashes. So the compromise is the rest of the security range. Triggers a jump method
      */
-    if (self.selectIndex >= _totalItemsCount - _originItemsCount * 20) {
-        [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:_totalItemsCount * 0.5 + (self.selectIndex % _originItemsCount) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+    if (self.selectIndex >= _totalItemsCount - _originItemsCount * 20 || self.selectIndex <= 20 * _originItemsCount) {
         self.selectIndex = _totalItemsCount * 0.5 + (self.selectIndex % _originItemsCount);
+        [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:self.selectIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
     }
 }
 
@@ -340,15 +344,26 @@
  */
 - (void)scrollViewDidEndScrollingAnimation:(UIScrollView *)scrollView
 {
+    
+    CGFloat selectIndexOff = self.selectIndex * (_flowLayout.itemSize.width + _flowLayout.minimumLineSpacing);
+    CGFloat scrollViewOff = scrollView.contentOffset.x;
+    if (_flowLayout.scrollDirection == UICollectionViewScrollDirectionHorizontal) {
+        selectIndexOff = self.selectIndex * (_flowLayout.itemSize.height + _flowLayout.minimumLineSpacing);
+        scrollViewOff = scrollView.contentOffset.y;
+    }
+    if (selectIndexOff != scrollViewOff) {
+        [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:self.selectIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:YES];
+    }
+    
+    
     if (!self.totalItemsCount) return;
-    int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:self.selectIndex];
+    NSInteger indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:self.selectIndex];
     if (_delegateFlags.didScrollToIndex) {
         [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
     } else if (_itemDidScrollOperationBlock) {
         _itemDidScrollOperationBlock(indexOnPageControl);
     }
 }
-
 
 #pragma mark - Public external methods
 
@@ -370,14 +385,17 @@
 }
 
 - (void)makeScrollViewScrollToIndex:(NSInteger)index{
+    
+    if (0 == _totalItemsCount){
+        return;
+    };
+    
     if (self.autoScroll) {
         [self invalidateTimer];
     }
-    if (0 == _totalItemsCount) return;
-    
-    [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:(int)(_totalItemsCount * 0.5 + index) inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
-    self.selectIndex = (int)(_totalItemsCount * 0.5 + index);
-    int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:index];
+    self.selectIndex = (NSInteger)_totalItemsCount * 0.5 + index;
+    [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:self.selectIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
+    NSInteger indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:index];
     if (_delegateFlags.didScrollToIndex) {
         [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
     } else if (self.itemDidScrollOperationBlock) {
@@ -419,7 +437,7 @@
 {
     if (self.selectIndex < _totalItemsCount) {
         [_mainView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:self.selectIndex inSection:0] atScrollPosition:[self getScrollPositionCentered] animated:NO];
-        int indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:self.selectIndex];
+        NSInteger indexOnPageControl = [self pageControlIndexWithCurrentCellIndex:self.selectIndex];
         if (_delegateFlags.didScrollToIndex) {
             [self.delegate cycleScrollView:self didScrollToIndex:indexOnPageControl];
         } else if (self.itemDidScrollOperationBlock) {
